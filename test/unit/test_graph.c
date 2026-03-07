@@ -122,6 +122,58 @@ static void test_sssp_bfs(void **state) {
 	assert_ptr_equal(neptune, neptune->via);
 }
 
+static void test_sssp_dijkstra(void **state) {
+	(void)state;
+
+	node_t *mars = make_node("mars");
+	node_t *saturn = make_node("saturn");
+	node_t *uranus = make_node("uranus");
+	node_t *neptune = make_node("neptune");
+
+	//          1000           1000
+	// myself -------- mars ------------- neptune
+	//      \                              /
+	//       ------- saturn --- uranus ----
+	//          10        10         10
+	//
+	// 2-hop: myself->mars->neptune        weight = 1000+1000 = 2000
+	// 3-hop: myself->saturn->uranus->neptune  weight = 10+10+10 = 30
+	//
+	// Dijkstra must pick the 3-hop lower-weight path.
+	// BFS (hop-count-first) would incorrectly pick the 2-hop path.
+
+	// Upper route (2 hops, high weight)
+	connect_nodes(myself, mars, 1000);
+	connect_nodes(mars, neptune, 1000);
+
+	// Lower route (3 hops, low weight)
+	connect_nodes(myself, saturn, 10);
+	connect_nodes(saturn, uranus, 10);
+	connect_nodes(uranus, neptune, 10);
+
+	sssp_bfs();
+
+	assert_true(mars->status.visited);
+	assert_true(saturn->status.visited);
+	assert_true(uranus->status.visited);
+	assert_true(neptune->status.visited);
+
+	assert_int_equal(1, mars->distance);
+	assert_int_equal(1, saturn->distance);
+	assert_int_equal(2, uranus->distance);
+	assert_int_equal(3, neptune->distance);
+
+	assert_ptr_equal(mars, mars->nexthop);
+	assert_ptr_equal(saturn, saturn->nexthop);
+	assert_ptr_equal(saturn, uranus->nexthop);
+	assert_ptr_equal(saturn, neptune->nexthop);
+
+	assert_ptr_equal(lookup_edge(myself, mars), mars->prevedge);
+	assert_ptr_equal(lookup_edge(myself, saturn), saturn->prevedge);
+	assert_ptr_equal(lookup_edge(saturn, uranus), uranus->prevedge);
+	assert_ptr_equal(lookup_edge(uranus, neptune), neptune->prevedge);
+}
+
 static int setup(void **state) {
 	(void)state;
 	myself = new_node("myself");
@@ -139,7 +191,8 @@ static int teardown(void **state) {
 int main(void) {
 	const struct CMUnitTest tests[] = {
 		cmocka_unit_test_setup_teardown(test_sssp_bfs, setup, teardown),
-		cmocka_unit_test_setup_teardown(test_sssp_bfs_2, setup, teardown)
+		cmocka_unit_test_setup_teardown(test_sssp_bfs_2, setup, teardown),
+		cmocka_unit_test_setup_teardown(test_sssp_dijkstra, setup, teardown)
 	};
 	return cmocka_run_group_tests(tests, NULL, NULL);
 }
