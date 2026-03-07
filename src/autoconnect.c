@@ -117,7 +117,8 @@ static void drop_superfluous_outgoing_connection(void) {
 	uint32_t count = 0;
 
 	for list_each(connection_t, c, &connection_list) {
-		if(!c->edge || !c->outgoing || !c->node || c->node->edge_tree.count < 2) {
+		if(!c->edge || !c->outgoing || !c->node || c->node->edge_tree.count < 2
+		   || c->outgoing->from_connectto) {
 			continue;
 		}
 
@@ -131,7 +132,8 @@ static void drop_superfluous_outgoing_connection(void) {
 	uint32_t r = prng(count);
 
 	for list_each(connection_t, c, &connection_list) {
-		if(!c->edge || !c->outgoing || !c->node || c->node->edge_tree.count < 2) {
+		if(!c->edge || !c->outgoing || !c->node || c->node->edge_tree.count < 2
+		   || c->outgoing->from_connectto) {
 			continue;
 		}
 

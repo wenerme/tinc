@@ -122,6 +122,7 @@ typedef struct outgoing_t {
 	struct node_t *node;
 	int timeout;
 	timeout_t ev;
+	bool from_connectto;    /* true if created from ConnectTo config */
 } outgoing_t;
 
 typedef struct ports_t {
