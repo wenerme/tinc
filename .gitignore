@@ -56,3 +56,4 @@ heaptrack.*
 /subprojects/*
 !/subprojects/*.wrap
 __pycache__
+*.local.md
