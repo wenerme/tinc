@@ -119,8 +119,10 @@ static void mst_kruskal(void) {
 // Not putting it into header, the outside world doesn't need to know about it.
 extern void sssp_bfs(void);
 
-/* Implementation of a simple breadth-first search algorithm.
-   Running time: O(E)
+/* Hop-count primary, cumulative weight secondary shortest path algorithm.
+   Uses FIFO queue with re-enqueue on relaxation.  Hop-count is the primary
+   sort key for stability in mixed networks; cumulative weight (updated via
+   EWMA smoothed RTT) is used as tiebreaker within the same hop distance.
 */
 void sssp_bfs(void) {
 	list_t *todo_list = list_alloc(NULL);
@@ -131,6 +133,7 @@ void sssp_bfs(void) {
 		n->status.visited = false;
 		n->status.indirect = true;
 		n->distance = -1;
+		n->weighted_distance = INT_MAX / 2;
 	}
 
 	/* Begin with myself */
@@ -324,4 +327,68 @@ void graph(void) {
 	sssp_bfs();
 	check_reachability();
 	mst_kruskal();
+}
+
+/* Update edge weights for our direct connections based on EWMA smoothed RTT.
+   Only updates if the weight has changed by more than 20% (hysteresis).
+   Returns true if any edge was updated and graph() was called. */
+bool update_edge_weights(void) {
+	bool changed = false;
+
+	for list_each(connection_t, c, &connection_list) {
+		if(!c->edge || c->edge->from != myself || !c->node) {
+			continue;
+		}
+
+		/* Only use smoothed RTT if we have UDP confirmation */
+		if(c->node->smoothed_rtt < 0) {
+			continue;
+		}
+
+		/* Convert microseconds to milliseconds, minimum weight of 1 */
+		int new_weight = c->node->smoothed_rtt / 1000;
+
+		if(new_weight < 1) {
+			new_weight = 1;
+		}
+
+		/* Add jitter penalty: high variance = less desirable link */
+		new_weight += c->node->rtt_variance / 2000;
+
+		int old_weight = c->edge->weight;
+
+		/* Hysteresis: only update if change exceeds 20% or absolute delta >= 2ms */
+		int delta = abs(new_weight - old_weight);
+
+		if(old_weight > 0 && delta * 5 <= old_weight && delta < 2) {
+			continue;
+		}
+
+		logger(DEBUG_TRAFFIC, LOG_INFO, "Updating edge weight for %s: %d -> %d (srtt=%d.%03d var=%d.%03d)",
+		       c->node->name, old_weight, new_weight,
+		       c->node->smoothed_rtt / 1000, c->node->smoothed_rtt % 1000,
+		       c->node->rtt_variance / 1000, c->node->rtt_variance % 1000);
+
+		splay_node_t *node = splay_unlink(&edge_weight_tree, c->edge);
+		c->edge->weight = new_weight;
+
+		if(node) {
+			splay_insert_node(&edge_weight_tree, node);
+		} else {
+			logger(DEBUG_ALWAYS, LOG_WARNING, "Edge to %s not found in weight tree during weight update", c->node->name);
+		}
+
+		/* Broadcast the updated weight to the network */
+		if(!tunnelserver) {
+			send_add_edge(everyone, c->edge);
+		}
+
+		changed = true;
+	}
+
+	if(changed) {
+		graph();
+	}
+
+	return changed;
 }

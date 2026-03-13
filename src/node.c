@@ -84,6 +84,8 @@ node_t *new_node(const char *name) {
 	n->mtu = MTU;
 	n->maxmtu = MTU;
 	n->udp_ping_rtt = -1;
+	n->smoothed_rtt = -1;
+	n->rtt_variance = 0;
 	n->name = xstrdup(name);
 
 	return n;

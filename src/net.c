@@ -296,6 +296,15 @@ static void periodic_handler(void *data) {
 		do_autoconnect();
 	}
 
+	/* Periodically update edge weights based on EWMA smoothed RTT.
+	   periodic_handler runs every 5s; update weights every 6th call (~30s). */
+	static int weight_update_counter = 0;
+
+	if(++weight_update_counter >= 6) {
+		weight_update_counter = 0;
+		update_edge_weights();
+	}
+
 	timeout_set(data, &(struct timeval) {
 		5, jitter()
 	});

@@ -130,6 +130,8 @@ static void udp_probe_timeout_handler(void *data) {
 	logger(DEBUG_TRAFFIC, LOG_INFO, "Too much time has elapsed since last UDP ping response from %s (%s), stopping UDP communication", n->name, n->hostname);
 	n->status.udp_confirmed = false;
 	n->udp_ping_rtt = -1;
+	n->smoothed_rtt = -1;
+	n->rtt_variance = 0;
 	n->maxrecentlen = 0;
 	n->mtuprobes = 0;
 	n->minmtu = 0;
@@ -185,7 +187,18 @@ static void udp_probe_h(node_t *n, vpn_packet_t *packet, length_t len) {
 		timersub(&now, &n->udp_ping_sent, &rtt);
 		n->udp_ping_rtt = (int)(rtt.tv_sec * 1000000 + rtt.tv_usec);
 		n->status.ping_sent = false;
-		logger(DEBUG_TRAFFIC, LOG_INFO, "Got type %d UDP probe reply %d from %s (%s) rtt=%d.%03d", DATA(packet)[0], len, n->name, n->hostname, n->udp_ping_rtt / 1000, n->udp_ping_rtt % 1000);
+
+		/* Update EWMA smoothed RTT (TCP-style: α=1/8, β=1/4) */
+		if(n->smoothed_rtt < 0) {
+			n->smoothed_rtt = n->udp_ping_rtt;
+			n->rtt_variance = n->udp_ping_rtt / 2;
+		} else {
+			int err = n->udp_ping_rtt - n->smoothed_rtt;
+			n->smoothed_rtt += err / 8;
+			n->rtt_variance += (abs(err) - n->rtt_variance) / 4;
+		}
+
+		logger(DEBUG_TRAFFIC, LOG_INFO, "Got type %d UDP probe reply %d from %s (%s) rtt=%d.%03d srtt=%d.%03d", DATA(packet)[0], len, n->name, n->hostname, n->udp_ping_rtt / 1000, n->udp_ping_rtt % 1000, n->smoothed_rtt / 1000, n->smoothed_rtt % 1000);
 	} else {
 		logger(DEBUG_TRAFFIC, LOG_INFO, "Got type %d UDP probe reply %d from %s (%s)", DATA(packet)[0], len, n->name, n->hostname);
 	}

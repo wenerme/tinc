@@ -22,5 +22,6 @@
 */
 
 extern void graph(void);
+extern bool update_edge_weights(void);
 
 #endif
