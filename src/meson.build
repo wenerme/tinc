@@ -324,7 +324,22 @@ if not opt_lzo.disabled()
                          fallback: ['lzo2', 'lzo2_dep'])
   endif
   if dep_lzo.found()
-    if dep_lzo.type_name() == 'internal' or cc.has_header('lzo/lzo1x.h', dependencies: dep_lzo)
+    # Some distros (e.g. Homebrew lzo) ship a pkg-config with -I.../include/lzo
+    # which breaks internal includes like <lzo/lzoconf.h> from within lzo1x.h.
+    # If <lzo/lzo1x.h> is not found, try adding the parent include directory.
+    lzo_ok = dep_lzo.type_name() == 'internal' or cc.has_header('lzo/lzo1x.h', dependencies: dep_lzo)
+    if not lzo_ok
+      lzo_parent_inc = include_directories()
+      foreach p : ['/opt/homebrew/include', '/usr/local/include', '/usr/include']
+        if cc.has_header('lzo/lzo1x.h', args: '-I' + p)
+          lzo_parent_inc = include_directories(p, is_system: true)
+          dep_lzo = declare_dependency(dependencies: dep_lzo, include_directories: lzo_parent_inc)
+          lzo_ok = true
+          break
+        endif
+      endforeach
+    endif
+    if lzo_ok
       cdata.set('LZO1X_H', '<lzo/lzo1x.h>')
     elif cc.has_header('lzo1x.h', dependencies: dep_lzo)
       cdata.set('LZO1X_H', '<lzo1x.h>')
