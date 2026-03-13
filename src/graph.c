@@ -179,13 +179,13 @@ void sssp_bfs(void) {
 
 			if(e->to->status.visited
 			                && (!e->to->status.indirect || indirect)
-			                && e->to->weighted_distance <= n->weighted_distance + e->weight) {
+			                && (e->to->distance != n->distance + 1 || e->to->weighted_distance <= n->weighted_distance + e->weight)) {
 				continue;
 			}
 
-			// Update nexthop whenever we find a lower-weight path (Dijkstra relaxation)
+			// Only update nexthop at the same hop distance if cumulative weight is lower
 
-			if(!e->to->status.visited || e->to->weighted_distance > n->weighted_distance + e->weight) {
+			if(!e->to->status.visited || (e->to->distance == n->distance + 1 && e->to->weighted_distance > n->weighted_distance + e->weight)) {
 				e->to->nexthop = (n->nexthop == myself) ? e->to : n->nexthop;
 				e->to->weighted_distance = n->weighted_distance + e->weight;
 			}

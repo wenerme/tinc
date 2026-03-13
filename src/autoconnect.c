@@ -171,23 +171,30 @@ static void drop_superfluous_pending_connections(void) {
 }
 
 void do_autoconnect(void) {
-	/* Count number of active connections. */
+	/* Count number of active connections and ConnectTo connections. */
 	uint32_t nc = 0;
+	uint32_t connectto_count = 0;
 
 	for list_each(connection_t, c, &connection_list) {
 		if(c->edge) {
 			nc++;
+
+			if(c->outgoing && c->outgoing->from_connectto) {
+				connectto_count++;
+			}
 		}
 	}
 
-	/* Less than 3 connections? Eagerly try to make a new one. */
-	if(nc < 3) {
+	uint32_t min_connections = connectto_count > 3 ? connectto_count : 3;
+
+	/* Less than min_connections? Eagerly try to make a new one. */
+	if(nc < min_connections) {
 		make_new_connection();
 		return;
 	}
 
-	/* More than 3 connections? See if we can get rid of a superfluous one. */
-	if(nc > 3) {
+	/* More than min_connections? See if we can get rid of a superfluous one. */
+	if(nc > min_connections) {
 		drop_superfluous_outgoing_connection();
 	}
 
